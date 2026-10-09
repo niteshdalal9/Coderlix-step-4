@@ -1,0 +1,98 @@
+# One-time / maintenance helper: produce a GENUINE pnpm-lock.yaml on a real
+# runner, using the pnpm version pinned in package.json ("packageManager").
+#
+# This is NOT part of the CI gate (ci.yml). It is manual-only and read-only
+# with respect to the repository: it never commits or pushes. It uploads the
+# generated lockfile as a downloadable artifact; a human reviews it and
+# commits it.
+#
+# How to use:
+#   1. Actions tab -> "Generate lockfile" -> Run workflow (on the branch that
+#      has no pnpm-lock.yaml yet).
+#   2. Download the `pnpm-lock` artifact, unzip it, put pnpm-lock.yaml at the
+#      repository root, commit and push. ci.yml then runs with
+#      --frozen-lockfile against it.
+#
+# Deliberate choices:
+#   - No `cache: pnpm` on setup-node: that option requires an existing lockfile
+#     to compute its cache key and would fail here, before anything is
+#     generated.
+#   - `--no-frozen-lockfile` is explicit: on CI, pnpm defaults to
+#     --frozen-lockfile, which refuses to run when no lockfile exists.
+#   - It refuses to run if a lockfile already exists, so a committed lockfile is
+#     never silently regenerated (delete it deliberately if you really want to).
+#   - After generating, it re-installs with --frozen-lockfile to prove the file
+#     is in sync with every package manifest.
+
+name: Generate lockfile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: Generate pnpm-lock.yaml (pinned pnpm, real install)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Refuse to overwrite a committed lockfile
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            echo "::error::pnpm-lock.yaml already exists in this checkout. Delete it deliberately (and review the diff) if you really want to regenerate it."
+            exit 1
+          fi
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js (no package cache, since there is no lockfile yet)
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Verify the pinned pnpm version is the one running
+        run: |
+          expected="$(node -p "require('./package.json').packageManager.split('@')[1].split('+')[0]")"
+          actual="$(pnpm --version)"
+          echo "packageManager pin: ${expected}; running: ${actual}"
+          test "${actual}" = "${expected}"
+
+      - name: Generate the lockfile (real install, lockfile creation allowed)
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Check the lockfile exists and is non-empty
+        run: |
+          test -s pnpm-lock.yaml
+          head -n 5 pnpm-lock.yaml
+          grep -E '^lockfileVersion:' pnpm-lock.yaml
+
+      - name: Prove it is in sync (frozen install must succeed)
+        run: pnpm install --frozen-lockfile
+
+      - name: Summarize
+        run: |
+          {
+            echo "### pnpm-lock.yaml generated"
+            echo ""
+            echo "- pnpm: \`$(pnpm --version)\`"
+            echo "- $(grep -E '^lockfileVersion:' pnpm-lock.yaml)"
+            echo "- size: $(wc -c < pnpm-lock.yaml) bytes, $(wc -l < pnpm-lock.yaml) lines"
+            echo ""
+            echo "Download the \`pnpm-lock\` artifact, commit \`pnpm-lock.yaml\` at the repository root, then push."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the lockfile
+        uses: actions/upload-artifact@v6
+        with:
+          name: pnpm-lock
+          path: pnpm-lock.yaml
+          if-no-files-found: error
+          retention-days: 14

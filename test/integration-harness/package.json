@@ -1,0 +1,32 @@
+{
+  "name": "@coderlix/integration-harness",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Integration test harness: real PostgreSQL 16 + real Docker + throwaway git repositories, plus a secrets-redaction test helper. TEST INFRASTRUCTURE ONLY — not an application runtime.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "pg": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0",
+    "@vitest/coverage-v8": "catalog:",
+    "typescript": "^6.0.3",
+    "vitest": "catalog:"
+  }
+}

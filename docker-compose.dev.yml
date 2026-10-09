@@ -1,0 +1,60 @@
+# Coderlix — local development stack only.
+#
+# This is NOT a production deployment topology (no such thing is implied or
+# assumed by this file). It exists solely so a developer can run
+# `docker compose -f docker-compose.dev.yml up -d postgres` and get the
+# Postgres 16 instance that later steps (DB schema/migrations, Execution
+# Manager integration tests, etc.) depend on.
+#
+# Redis is defined but OFF BY DEFAULT: the architecture (Final Architecture
+# §37, Implementation Plan §1.2) treats Redis as optional at MVP, with an
+# in-process queue/cache as the default. Redis is placed behind the
+# "redis" Compose profile, so it only starts when explicitly requested:
+#   docker compose -f docker-compose.dev.yml --profile redis up -d redis
+#
+# Values are sourced from environment variables (see .env.example). No
+# secrets are hard-coded here; defaults are development-only convenience
+# values, never intended for anything beyond a local throwaway database.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: coderlix-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-coderlix}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-coderlix_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-coderlix_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - coderlix_postgres_dev_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-coderlix} -d ${POSTGRES_DB:-coderlix_dev}"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    container_name: coderlix-redis-dev
+    restart: unless-stopped
+    profiles:
+      - redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  coderlix_postgres_dev_data:
+    name: coderlix_postgres_dev_data

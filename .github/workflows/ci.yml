@@ -1,0 +1,230 @@
+# Coderlix CI (Step 03 — Tooling, CI, test harness).
+#
+# One deterministic pipeline, split into four independent jobs so each
+# status is visible on its own:
+#
+#   static       build, typecheck (sources AND tests), lint, dependency
+#                boundaries (+ the boundary self-test from Step 02)
+#   unit         hermetic unit tests (no Docker, no Postgres, no network)
+#   coverage     coverage generation (no thresholds yet — see
+#                vitest.shared.ts); uploads the reports as an artifact
+#   integration  the FULL integration suite against a REAL Docker daemon
+#                and a REAL PostgreSQL 16 container
+#
+# Rules this file enforces (do not weaken them):
+#   - Dependencies come from the pnpm version pinned by `packageManager`
+#     in package.json (currently pnpm 11.28.3) and a COMMITTED lockfile
+#     installed with --frozen-lockfile. No lockfile => the job fails.
+#   - The integration job runs on a real GitHub-hosted Linux runner, which
+#     ships a real Docker Engine + Compose. There is no mock Docker and no
+#     skip path: if Docker is unusable the job FAILS (the Docker
+#     diagnostics step and the harness itself both fail closed). A
+#     Docker-dependent test can only pass if Docker really ran it.
+#   - Runner images are pinned (ubuntu-24.04) rather than `ubuntu-latest`.
+#   - The token is read-only and no secrets are used.
+#
+# Third-party actions are referenced by major-version tag. Pinning them to
+# full commit SHAs is a recommended hardening follow-up (the SHAs could not
+# be resolved when this file was authored).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  static:
+    name: Build, typecheck, lint, boundaries
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Require a committed pnpm-lock.yaml
+        run: |
+          if [ ! -f pnpm-lock.yaml ]; then
+            echo "::error::pnpm-lock.yaml is not committed. Deterministic CI requires it: run 'pnpm install' locally, or run the manual 'Generate lockfile' workflow, then commit pnpm-lock.yaml."
+            exit 1
+          fi
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Verify the pinned pnpm version is the one running
+        run: |
+          expected="$(node -p "require('./package.json').packageManager.split('@')[1].split('+')[0]")"
+          actual="$(pnpm --version)"
+          echo "packageManager pin: ${expected}; running: ${actual}"
+          test "${actual}" = "${expected}"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (tsc -b, every package)
+        run: pnpm run build
+
+      - name: Typecheck (sources, then tests/configs/harness)
+        run: pnpm run typecheck:all
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Dependency-boundary self-test
+        run: pnpm run boundaries:self-test
+
+      - name: Dependency-boundary policy regression check
+        run: pnpm run boundaries:policy
+
+      - name: Dependency-boundary validation
+        run: pnpm run boundaries
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Require a committed pnpm-lock.yaml
+        run: |
+          if [ ! -f pnpm-lock.yaml ]; then
+            echo "::error::pnpm-lock.yaml is not committed. Deterministic CI requires it: run 'pnpm install' locally, or run the manual 'Generate lockfile' workflow, then commit pnpm-lock.yaml."
+            exit 1
+          fi
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Unit tests (hermetic - no Docker, no Postgres)
+        run: pnpm run test:unit
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Require a committed pnpm-lock.yaml
+        run: |
+          if [ ! -f pnpm-lock.yaml ]; then
+            echo "::error::pnpm-lock.yaml is not committed. Deterministic CI requires it: run 'pnpm install' locally, or run the manual 'Generate lockfile' workflow, then commit pnpm-lock.yaml."
+            exit 1
+          fi
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate coverage (v8, per package)
+        run: pnpm run coverage
+
+      - name: Upload coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage
+          path: |
+            packages/*/coverage
+            apps/*/coverage
+            test/*/coverage
+          if-no-files-found: warn
+          retention-days: 7
+
+  integration:
+    name: Integration tests (real Docker + PostgreSQL 16)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Require a committed pnpm-lock.yaml
+        run: |
+          if [ ! -f pnpm-lock.yaml ]; then
+            echo "::error::pnpm-lock.yaml is not committed. Deterministic CI requires it: run 'pnpm install' locally, or run the manual 'Generate lockfile' workflow, then commit pnpm-lock.yaml."
+            exit 1
+          fi
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fails the job outright if there is no usable Linux Docker daemon or
+      # Compose. Nothing downstream may be reported green without Docker.
+      - name: Docker diagnostics (must be a real Linux daemon)
+        run: |
+          docker version
+          docker compose version
+          docker info --format 'server={{.ServerVersion}} os={{.OSType}} storage-driver={{.Driver}}'
+
+      - name: Integration tests (real Docker, real PostgreSQL 16, real git)
+        run: pnpm run test:integration
+
+      # The harness must clean up after itself; flag anything it left behind.
+      - name: Verify the harness left no containers behind
+        if: ${{ !cancelled() }}
+        run: |
+          leftovers="$(docker ps --all --quiet --filter label=coderlix.test-harness=1)"
+          if [ -n "${leftovers}" ]; then
+            echo "::error::Harness containers were left running:"
+            docker ps --all --filter label=coderlix.test-harness=1
+            exit 1
+          fi
+          echo "No harness containers remain."

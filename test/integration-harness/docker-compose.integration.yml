@@ -1,0 +1,57 @@
+# Coderlix integration-test harness fixture (Step 03 — Tooling, CI, test harness).
+#
+# THROWAWAY test infrastructure. Started and destroyed by
+# `startStack()` (test/integration-harness/src/stack.ts) under a unique
+# per-run Compose project name; never used for development or deployment
+# (that is docker-compose.dev.yml at the repo root).
+#
+# Properties that are deliberate and asserted by
+# test/unit/compose-fixture.test.ts (so they cannot drift silently):
+#   - PostgreSQL 16 (Final Architecture §3 / §37, Implementation Plan §1.2).
+#   - The data directory is a tmpfs: every run starts from an empty
+#     cluster and leaves nothing behind. There are no volumes of any kind.
+#   - The host port is published on LOOPBACK ONLY and is chosen by Docker
+#     (ephemeral), so parallel runs on one host cannot collide and nothing
+#     is reachable from the network.
+#   - The healthcheck uses TCP (-h 127.0.0.1). The official image runs a
+#     temporary init server that listens on the unix socket only; a TCP
+#     probe therefore only succeeds once the REAL server is up, which
+#     avoids the classic "healthy, then connection reset" race.
+#   - Nothing is mounted from the host. In particular the Docker socket is
+#     NEVER mounted into any container (Final Architecture §26.1: "No
+#     Docker socket exposure or mount, under any circumstance"). The test
+#     PROCESS talks to the host Docker daemon through the docker CLI; no
+#     container ever receives that access.
+#   - The credentials below are throwaway, test-only values that only ever
+#     exist inside a tmpfs-backed container bound to loopback. They are
+#     passed in by the harness from the same constants (src/constants.ts);
+#     the defaults here exist only for manual `docker compose` use.
+#
+# The plan's "throwaway git repo server" is realised as a bare "origin"
+# repository on the local filesystem created by `freshRepo()` (see
+# src/fresh-repo.ts and the README) rather than as a service here.
+
+services:
+  postgres:
+    image: postgres:16
+    labels:
+      coderlix.test-harness: "1"
+    environment:
+      POSTGRES_USER: ${CODERLIX_IT_POSTGRES_USER:-coderlix_it}
+      POSTGRES_PASSWORD: ${CODERLIX_IT_POSTGRES_PASSWORD:-coderlix_it_only}
+      POSTGRES_DB: ${CODERLIX_IT_POSTGRES_DB:-coderlix_it}
+    ports:
+      - "127.0.0.1::5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    restart: "no"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+      start_period: 2s

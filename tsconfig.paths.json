@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "//": "NOT currently consulted by anything. This file's original purpose: provide .dependency-cruiser.cjs's `tsConfig` option a way to resolve `@coderlix/*` workspace-package import specifiers down to source files, so the dependency-boundary check would work on import statements even before any package.json declares a real `workspace:*` dependency. That `tsConfig` reference was removed from .dependency-cruiser.cjs after a real run showed it caused dependency-cruiser to report '0 modules, 0 dependencies cruised' -- i.e. it silently stopped scanning any production file at all. This file is left in place, unused, because the underlying need (resolving @coderlix/* aliases for the boundary check) will return once a later step adds a real cross-package import using that syntax -- see .dependency-cruiser.cjs's options comment for the full diagnostic history and the forward-looking caveat. This file is NOT extended by any package's own tsconfig.json and is NOT used for `tsc -b` / `pnpm -r build`; each package continues to build in isolation per its own tsconfig.json.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@coderlix/shared-types": ["packages/shared-types/src/index.ts"],
+      "@coderlix/db": ["packages/db/src/index.ts"],
+      "@coderlix/execution": ["packages/execution/src/index.ts"],
+      "@coderlix/evidence": ["packages/evidence/src/index.ts"],
+      "@coderlix/budget": ["packages/budget/src/index.ts"],
+      "@coderlix/knowledge": ["packages/knowledge/src/index.ts"],
+      "@coderlix/providers": ["packages/providers/src/index.ts"],
+      "@coderlix/workspace": ["packages/workspace/src/index.ts"],
+      "@coderlix/git-service": ["packages/git-service/src/index.ts"],
+      "@coderlix/verification": ["packages/verification/src/index.ts"],
+      "@coderlix/agents": ["packages/agents/src/index.ts"],
+      "@coderlix/orchestrator": ["packages/orchestrator/src/index.ts"],
+      "@coderlix/api": ["apps/api/src/index.ts"],
+      "@coderlix/web": ["apps/web/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/agents/boundary-fixture/**/*.ts",
+    "apps/*/src/**/*.ts"
+  ]
+}

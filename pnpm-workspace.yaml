@@ -1,0 +1,52 @@
+# Coderlix pnpm workspace definition.
+#
+# Step 02 (monorepo/package structure, per Final Architecture §36)
+# materialized the 12 packages/* and 2 apps/* directories the first two
+# globs match. Each is an empty, buildable skeleton — see each package's
+# own README.md and the root README's "Implementation status" section.
+#
+# Step 03 (tooling, CI, test harness) adds:
+#   - the `test/*` glob, so `test/integration-harness` is a workspace
+#     member (test infrastructure only — it is NOT an application
+#     package and nothing under packages/* or apps/* may depend on it
+#     from production source);
+#   - a `catalog:` pinning the test-runner toolchain to ONE exact version
+#     for every member (see below);
+#   - an `allowBuilds` review entry (see below).
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "test/*"
+
+# Single source of truth for the test toolchain versions. Members refer to
+# these as `"vitest": "catalog:"`.
+#
+# Both are pinned EXACTLY (no caret) because @vitest/coverage-v8 declares
+# an exact-match peer dependency on `vitest`; a floating range could let
+# the two drift apart and break `pnpm install`.
+#
+# Vitest 4.1.x (not 5.x) is deliberate: Vitest 5.0 (2026-09-03) changed
+# defaults (e.g. `clearMocks`) and this step could not validate that
+# major in the authoring environment. Moving to 5.x is a separate,
+# deliberate upgrade of BOTH entries together.
+catalog:
+  vitest: 4.1.11
+  "@vitest/coverage-v8": 4.1.11
+  # Step 04: schema/validation library for every cross-boundary contract
+  # (packages/shared-types, and later every package that parses them).
+  # One catalog entry so all members resolve the same major. Caret is
+  # acceptable (unlike the vitest pair) because pnpm-lock.yaml pins the
+  # resolved version and CI installs with --frozen-lockfile.
+  zod: ^4.0.0
+
+# pnpm 11 sets `strictDepBuilds: true` by default: `pnpm install` exits
+# non-zero if ANY dependency has an unreviewed install/postinstall script.
+# The Vite toolchain behind Vitest may pull in `esbuild`, whose
+# postinstall script is an optional optimisation (the platform binary is
+# resolved through optionalDependencies at runtime), so it is explicitly
+# reviewed here as NOT allowed to run. If the installed tree is
+# esbuild-free this entry is inert. If `pnpm install` reports a
+# different unreviewed build script, review it deliberately and add it
+# here — do not flip `strictDepBuilds` off.
+allowBuilds:
+  esbuild: false

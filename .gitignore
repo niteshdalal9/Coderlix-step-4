@@ -1,0 +1,47 @@
+# --- Dependencies ---
+node_modules/
+.pnpm-store/
+
+# --- Build output ---
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+
+# --- Environment / secrets ---
+# Never commit real env files or credentials. .env.example is the only
+# env file tracked in this repository.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*.json
+
+# --- Logs ---
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# --- Test / coverage artifacts ---
+.nyc_output/
+junit.xml
+
+# --- Docker / local data volumes ---
+.docker/
+pgdata/
+
+# --- Editor / IDE ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Misc ---
+*.swp
+*.swo
+.turbo/

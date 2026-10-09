@@ -1,0 +1,41 @@
+{
+  "name": "coderlix",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Coderlix — modular-monolith system that turns a user request into a verified code change using specialized agents plus deterministic infrastructure. This root package is the pnpm workspace root only; no application code lives here.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@11.28.3",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "typecheck:tests": "tsc -p tsconfig.test.json",
+    "typecheck:all": "pnpm run typecheck && pnpm run typecheck:tests",
+    "lint": "eslint . --max-warnings=0",
+    "boundaries": "pnpm -r run build && node scripts/boundaries.mjs",
+    "boundaries:self-test": "node scripts/boundaries-self-test.mjs",
+    "boundaries:policy": "node scripts/boundaries-policy-check.mjs",
+    "test:unit": "pnpm -r --workspace-concurrency=1 run test",
+    "test:integration": "pnpm -r --workspace-concurrency=1 run test:integration",
+    "test:all": "pnpm run test:unit && pnpm run test:integration",
+    "test": "pnpm run test:all",
+    "coverage": "pnpm -r --workspace-concurrency=1 run test:coverage",
+    "test:coverage": "pnpm run coverage",
+    "dev:db:up": "docker compose -f docker-compose.dev.yml up -d postgres",
+    "dev:db:down": "docker compose -f docker-compose.dev.yml down"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^22.12.0",
+    "@vitest/coverage-v8": "catalog:",
+    "dependency-cruiser": "^16.3.0",
+    "eslint": "^9.39.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "catalog:"
+  }
+}

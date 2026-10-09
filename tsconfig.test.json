@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "//": "Step 03. Type-checks everything the per-package `tsc -b` builds deliberately do NOT cover: unit/integration tests, every vitest*.config.ts, the shared vitest.shared.ts, and the integration harness (test/**). Run via `pnpm run typecheck:tests`; `pnpm run typecheck:all` runs it together with the per-package source typecheck. noEmit only -- nothing here is ever built into dist/. Uses Bundler module resolution (not the base's NodeNext) because Vitest/Vite, not Node, loads the test files themselves. The vitest*.config.ts files import `../../vitest.shared.ts` WITH its extension so they also load under Vite's `configLoader: native` (plain Node ESM, which needs exact file names); `allowImportingTsExtensions` makes that legal here and is only allowed because this config is noEmit. `types` is explicit because TypeScript 6 no longer auto-includes @types/* packages.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "composite": false,
+    "incremental": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": [
+    "vitest.shared.ts",
+    "packages/*/test/**/*.ts",
+    "packages/*/vitest*.config.ts",
+    "apps/*/test/**/*.ts",
+    "apps/*/vitest*.config.ts",
+    "test/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**"
+  ]
+}
